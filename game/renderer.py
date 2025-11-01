@@ -11,10 +11,10 @@ def _compute_cell_size(bs):
     max_size = 70
     min_size = 30
     # board size bounds
-    min_board_dim = 1
-    max_board_dim = 30 
-        
-    inv_sig = (-1/(1+ np.exp(-(bs-min_board_dim)/(max_board_dim-min_board_dim))))
+    min_board_dim = 7
+    max_board_dim = 200
+    x = -(bs-min_board_dim)/(max_board_dim-min_board_dim)
+    inv_sig = -1/(1+ np.exp(x))
     offset = (1.5/(bs/max_board_dim))
     cell_size =  int(inv_sig + offset + min_size)
 
@@ -29,6 +29,7 @@ class GoRenderer:
         
         if cell_size == None:
             cell_size = _compute_cell_size(BOARD_SIZE)
+            print(f"Cell size: {cell_size}")
 
         self.board = board
         self.cell_size = cell_size
