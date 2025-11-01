@@ -1,4 +1,4 @@
-# test_game.py
+# play_game.py
 """Test game with different agent configurations"""
 from game.go_board import GoBoard
 from game.renderer import GoRenderer
