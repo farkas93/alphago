@@ -103,57 +103,48 @@ class GoRenderer:
         """Draw game information at bottom"""
         y_start = self.margin + self.board.size * self.cell_size + 20
         
-        # Game over message
+        # Game over message with score
         if self.game_over:
+            black_score, white_score, winner = self.board.score_game()
+            
+            # Game over title
             text = self.font.render("GAME OVER!", True, self.COLOR_GAME_OVER)
             text_rect = text.get_rect(center=(self.width // 2, y_start))
             self.screen.blit(text, text_rect)
-            y_start += 40
+            
+            # Winner announcement
+            text = self.small_font.render(winner, True, self.COLOR_GAME_OVER)
+            text_rect = text.get_rect(center=(self.width // 2, y_start + 30))
+            self.screen.blit(text, text_rect)
+            
+            # Scores
+            score_text = f"Black: {black_score:.1f}  |  White: {white_score:.1f}"
+            text = self.small_font.render(score_text, True, self.COLOR_LINE)
+            text_rect = text.get_rect(center=(self.width // 2, y_start + 55))
+            self.screen.blit(text, text_rect)
+            
+            y_start += 80  # Adjust for additional info
         else:
-            # Current player with agent name if applicable
+            # Current player with agent name
             player_text = "Black" if self.board.current_player == 1 else "White"
             agent = self.black_agent if self.board.current_player == 1 else self.white_agent
             if agent:
-                player_text += f" ({agent.name})"  # Show agent name
+                player_text += f" ({agent.name})"
             text = self.font.render(f"Turn: {player_text}", True, self.COLOR_LINE)
             self.screen.blit(text, (20, y_start))
+            
+            y_start += 40
         
-        # Captures
+        # Captures (always show)
         captures_text = f"Captures - B: {self.board.captured[1]}  W: {self.board.captured[-1]}"
         text = self.small_font.render(captures_text, True, self.COLOR_LINE)
-        self.screen.blit(text, (20, y_start + 40))
+        self.screen.blit(text, (20, y_start))
         
         # Instructions
         inst_text = "Click to play | L: Toggle legal moves | R: Reset | ESC: Quit"
         text = self.small_font.render(inst_text, True, self.COLOR_LINE)
-        self.screen.blit(text, (20, y_start + 65))
+        self.screen.blit(text, (20, y_start + 25))
     
-    def _make_ai_move(self):
-        """Let AI agent make a move if it's their turn"""
-        if self.game_over:
-            return
-        
-        current_agent = None
-        if self.board.current_player == 1 and self.black_agent:
-            current_agent = self.black_agent
-        elif self.board.current_player == -1 and self.white_agent:
-            current_agent = self.white_agent
-        
-        if current_agent:
-            move = current_agent.select_move(self.board)
-            if move:
-                row, col = move
-                if self.board.play_move(row, col):
-                    self.last_move = (row, col)
-                    player = "Black" if self.board.current_player == -1 else "White"
-                    print(f"Move played: {player} ({current_agent.name}) at ({row}, {col})")
-                    
-                    if self.board.is_game_over():
-                        self.game_over = True
-                        print("Game Over! No more legal moves.")
-            else:
-                self.game_over = True
-                print("Game Over! Agent has no moves.")
 
     def get_board_position(self, mouse_pos: Tuple[int, int]) -> Optional[Tuple[int, int]]:
         """Convert mouse position to board coordinates"""
@@ -198,14 +189,13 @@ class GoRenderer:
                         self.board = GoBoard(self.board.size)
                         self.last_move = None
                         self.game_over = False
-                        self.last_ai_move_time = current_time  # Reset AI timer
+                        self.last_ai_move_time = current_time
                 
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     if not self.game_over:
-                        # Only allow human moves if no agent is controlling current player
                         current_agent = (self.black_agent if self.board.current_player == 1 
-                                       else self.white_agent)
-                        if not current_agent:  # Human player
+                                    else self.white_agent)
+                        if not current_agent:
                             pos = self.get_board_position(event.pos)
                             if pos:
                                 row, col = pos
@@ -216,14 +206,14 @@ class GoRenderer:
                                     
                                     if self.board.is_game_over():
                                         self.game_over = True
-                                        print("Game Over! No more legal moves.")
+                                        self._print_game_result()  # Added: print result
                                     else:
-                                        self.last_ai_move_time = current_time  # Start AI timer
+                                        self.last_ai_move_time = current_time
             
-            # AI move with delay for visibility
+            # AI move with delay
             if not self.game_over and current_time - self.last_ai_move_time > self.ai_move_delay:
                 current_agent = (self.black_agent if self.board.current_player == 1 
-                               else self.white_agent)
+                            else self.white_agent)
                 if current_agent:
                     self._make_ai_move()
                     self.last_ai_move_time = current_time
@@ -232,6 +222,43 @@ class GoRenderer:
             clock.tick(30)
         
         pygame.quit()
+
+    def _make_ai_move(self):
+        """Let AI agent make a move if it's their turn"""
+        if self.game_over:
+            return
+        
+        current_agent = None
+        if self.board.current_player == 1 and self.black_agent:
+            current_agent = self.black_agent
+        elif self.board.current_player == -1 and self.white_agent:
+            current_agent = self.white_agent
+        
+        if current_agent:
+            move = current_agent.select_move(self.board)
+            if move:
+                row, col = move
+                if self.board.play_move(row, col):
+                    self.last_move = (row, col)
+                    player = "Black" if self.board.current_player == -1 else "White"
+                    print(f"Move played: {player} ({current_agent.name}) at ({row}, {col})")
+                    
+                    if self.board.is_game_over():
+                        self.game_over = True
+                        self._print_game_result()  # Added: print result
+            else:
+                self.game_over = True
+                self._print_game_result()  # Added: print result
+
+    def _print_game_result(self):
+        """Print game over message with score"""
+        print("\n" + "="*50)
+        print("GAME OVER!")
+        black_score, white_score, winner = self.board.score_game()
+        print(f"Black: {black_score:.1f} points")
+        print(f"White: {white_score:.1f} points (including komi)")
+        print(f"Result: {winner}")
+        print("="*50 + "\n")
 
 
 # Example usage / test script

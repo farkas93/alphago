@@ -125,6 +125,85 @@ class GoBoard:
             self.board[r, c] = 0
         return list(group)
     
+    def _get_territory(self, row: int, col: int, visited: set) -> Tuple[Set[Tuple[int, int]], int]:
+        """
+        Find connected empty region and determine owner
+        Returns: (set of positions, owner)
+        owner: 1 (black), -1 (white), 0 (neutral/dame)
+        """
+        territory = set()
+        border_colors = set()
+        stack = [(row, col)]
+        
+        while stack:
+            r, c = stack.pop()
+            if (r, c) in territory or (r, c) in visited:
+                continue
+            if not (0 <= r < self.size and 0 <= c < self.size):
+                continue
+            
+            if self.board[r, c] == 0:  # Empty
+                territory.add((r, c))
+                # Check all 4 neighbors
+                for dr, dc in [(0, 1), (1, 0), (0, -1), (-1, 0)]:
+                    stack.append((r + dr, c + dc))
+            else:  # Stone found at border
+                border_colors.add(self.board[r, c])
+        
+        # Determine owner based on border colors
+        if len(border_colors) == 1:
+            owner = border_colors.pop()  # Territory belongs to this color
+        else:
+            owner = 0  # Neutral (borders both colors or no stones)
+        
+        return territory, owner
+
+    def score_game(self, komi: float = 6.5) -> Tuple[float, float, str]:
+        """
+        Score the game using area scoring (Chinese rules)
+        Returns: (black_score, white_score, winner)
+        komi: compensation points for white (typically 6.5 or 7.5)
+        """
+        black_score = 0
+        white_score = komi  # White gets komi compensation
+        
+        # Count stones and territory
+        visited = set()
+        
+        for row in range(self.size):
+            for col in range(self.size):
+                if (row, col) in visited:
+                    continue
+                
+                if self.board[row, col] == 1:  # Black stone
+                    black_score += 1
+                    visited.add((row, col))
+                elif self.board[row, col] == -1:  # White stone
+                    white_score += 1
+                    visited.add((row, col))
+                else:  # Empty point - determine territory
+                    territory, owner = self._get_territory(row, col, visited)
+                    if owner == 1:
+                        black_score += len(territory)
+                    elif owner == -1:
+                        white_score += len(territory)
+                    # If owner is 0, it's neutral territory (no points)
+                    visited.update(territory)
+        
+        # Add captured stones to score
+        black_score += self.captured[1]
+        white_score += self.captured[-1]
+        
+        # Determine winner
+        if black_score > white_score:
+            winner = f"Black wins by {black_score - white_score:.1f}"
+        elif white_score > black_score:
+            winner = f"White wins by {white_score - black_score:.1f}"
+        else:
+            winner = "Draw"
+        
+        return black_score, white_score, winner
+    
     def get_legal_moves(self) -> List[Tuple[int, int]]:
         """Return all legal moves for current player"""
         moves = []
