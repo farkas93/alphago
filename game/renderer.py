@@ -95,10 +95,18 @@ class GoRenderer:
         """Draw game information at bottom"""
         y_start = self.margin + self.board.size * self.cell_size + 20
         
-        # Current player
-        player_text = "Black" if self.board.current_player == 1 else "White"
-        text = self.font.render(f"Turn: {player_text}", True, self.COLOR_LINE)
-        self.screen.blit(text, (20, y_start))
+        # Game over message (if game is over)
+        if self.game_over:
+            text = self.font.render("GAME OVER!", True, self.COLOR_GAME_OVER)
+            # Center the text
+            text_rect = text.get_rect(center=(self.width // 2, y_start))
+            self.screen.blit(text, text_rect)
+            y_start += 40  # Push other info down
+        else:
+            # Current player (only show if game not over)
+            player_text = "Black" if self.board.current_player == 1 else "White"
+            text = self.font.render(f"Turn: {player_text}", True, self.COLOR_LINE)
+            self.screen.blit(text, (20, y_start))
         
         # Captures
         captures_text = f"Captures - B: {self.board.captured[1]}  W: {self.board.captured[-1]}"
@@ -147,24 +155,27 @@ class GoRenderer:
                     elif event.key == pygame.K_l:
                         self.show_legal_moves = not self.show_legal_moves
                     elif event.key == pygame.K_r:
-                        self.board = GoBoard(self.board.size)  # Reset
+                        self.board = GoBoard(self.board.size)
                         self.last_move = None
+                        self.game_over = False  # Added: reset game over flag
                 
                 elif event.type == pygame.MOUSEBUTTONDOWN:
-                    pos = self.get_board_position(event.pos)
-                    if pos:
-                        row, col = pos
-                        if self.board.play_move(row, col):
-                            self.last_move = (row, col)
-                            # Fixed: define player_text before using it
-                            player = "Black" if self.board.current_player == -1 else "White"  # Note: player switched after move
-                            print(f"Move played: {player} at ({row}, {col})")
-                            
-                            if self.board.is_game_over():
-                                print("Game Over!")
+                    if not self.game_over:  # Added: only allow moves if game not over
+                        pos = self.get_board_position(event.pos)
+                        if pos:
+                            row, col = pos
+                            if self.board.play_move(row, col):
+                                self.last_move = (row, col)
+                                player = "Black" if self.board.current_player == -1 else "White"
+                                print(f"Move played: {player} at ({row}, {col})")
+                                
+                                # Added: check for game over
+                                if self.board.is_game_over():
+                                    self.game_over = True
+                                    print("Game Over! No more legal moves.")
             
             self.draw_board()
-            clock.tick(30)  # 30 FPS
+            clock.tick(30)
         
         pygame.quit()
 
