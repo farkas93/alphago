@@ -1,11 +1,12 @@
 # game/go_board.py
 import numpy as np
 from typing import Tuple, Set, Optional, List
+from config import BOARD_SIZE
 
 class GoBoard:
     """9x9 Go board with Chinese rules"""
     
-    def __init__(self, size: int = 9):
+    def __init__(self, size: int = BOARD_SIZE):
         self.size = size
         self.board = np.zeros((size, size), dtype=np.int8)  # 0=empty, 1=black, -1=white
         self.current_player = 1  # Black starts

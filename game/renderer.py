@@ -4,13 +4,32 @@ import numpy as np
 from game.go_board import GoBoard
 from typing import Optional, Tuple
 from agents.base_agent import Agent
+from config import BOARD_SIZE
+
+def _compute_cell_size(bs):
+    # cell size bounds
+    max_size = 70
+    min_size = 30
+    # board size bounds
+    min_board_dim = 1
+    max_board_dim = 30 
+        
+    inv_sig = (-1/(1+ np.exp(-(bs-min_board_dim)/(max_board_dim-min_board_dim))))
+    offset = (1.5/(bs/max_board_dim))
+    cell_size =  int(inv_sig + offset + min_size)
+
+    return max(min_size, min(cell_size, max_size))
 
 class GoRenderer:
     """Pygame-based Go board renderer with mouse interaction"""
     
-    def __init__(self, board: GoBoard, cell_size: int = 60, 
+    def __init__(self, board: GoBoard, cell_size: int = None, # 60 for 9, 40 for 19, x for 15 ? 
                  black_agent: Optional['Agent'] = None,
                  white_agent: Optional['Agent'] = None):
+        
+        if cell_size == None:
+            cell_size = _compute_cell_size()
+
         self.board = board
         self.cell_size = cell_size
         self.margin = cell_size
