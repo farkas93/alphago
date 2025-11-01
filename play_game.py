@@ -1,53 +1,59 @@
-# play_game.py
-"""Quick test to verify everything works"""
+# test_game.py
+"""Test game with different agent configurations"""
 from game.go_board import GoBoard
-from game.features import FeatureExtractor
 from game.renderer import GoRenderer
+from agents.random_agent import RandomAgent
+from agents.heuristic_agent import HeuristicAgent
 
-def test_board_logic():
-    """Test basic Go rules"""
+def play_human_vs_random():
+    """Human (Black) vs Random Agent (White)"""
+    print("Mode: Human (Black) vs Random Agent (White)")
     board = GoBoard(9)
-    
-    # Test basic moves
-    assert board.play_move(4, 4), "Center move should be valid"
-    assert board.play_move(4, 5), "Adjacent move should be valid"
-    assert not board.play_move(4, 4), "Occupied position should be invalid"
-    
-    # Test capture
-    board2 = GoBoard(9)
-    board2.play_move(0, 1)  # Black
-    board2.play_move(0, 0)  # White
-    board2.play_move(1, 0)  # Black
-    assert board2.board[0, 0] == 0, "White stone should be captured"
-    
-    print("✓ Board logic tests passed")
+    renderer = GoRenderer(board, white_agent=RandomAgent())
+    renderer.run_interactive()
 
-def test_features():
-    """Test feature extraction"""
+def play_human_vs_heuristic():
+    """Human (Black) vs Heuristic Agent (White)"""
+    print("Mode: Human (Black) vs Heuristic Agent (White)")
     board = GoBoard(9)
-    board.play_move(4, 4)
-    board.play_move(4, 5)
-    
-    extractor = FeatureExtractor()
-    features = extractor.extract_features(board)
-    
-    assert features.shape == (17, 9, 9), f"Wrong shape: {features.shape}"
-    assert features.dtype == np.float32, "Wrong dtype"
-    
-    print("✓ Feature extraction tests passed")
+    renderer = GoRenderer(board, white_agent=HeuristicAgent())
+    renderer.run_interactive()
+
+def play_random_vs_heuristic():
+    """Random Agent (Black) vs Heuristic Agent (White) - Watch AI battle"""
+    print("Mode: Random Agent (Black) vs Heuristic Agent (White)")
+    board = GoBoard(9)
+    renderer = GoRenderer(board, 
+                         black_agent=RandomAgent(),
+                         white_agent=HeuristicAgent())
+    renderer.run_interactive()
+
+def play_heuristic_vs_heuristic():
+    """Heuristic vs Heuristic - Watch AI battle"""
+    print("Mode: Heuristic Agent (Black) vs Heuristic Agent (White)")
+    board = GoBoard(9)
+    renderer = GoRenderer(board,
+                         black_agent=HeuristicAgent(),
+                         white_agent=HeuristicAgent())
+    renderer.run_interactive()
 
 if __name__ == "__main__":
-    import numpy as np
-    test_board_logic()
-    test_features()
+    print("Choose game mode:")
+    print("1. Human vs Random Agent")
+    print("2. Human vs Heuristic Agent")
+    print("3. Random vs Heuristic (AI battle)")
+    print("4. Heuristic vs Heuristic (AI battle)")
     
-    print("\nLaunching interactive game...")
-    print("Controls:")
-    print("  - Click to place stones")
-    print("  - L: Toggle legal move hints")
-    print("  - R: Reset game")
-    print("  - ESC: Quit")
+    choice = input("Enter choice (1-4): ").strip()
     
-    board = GoBoard(9)
-    renderer = GoRenderer(board)
-    renderer.run_interactive()
+    if choice == "1":
+        play_human_vs_random()
+    elif choice == "2":
+        play_human_vs_heuristic()
+    elif choice == "3":
+        play_random_vs_heuristic()
+    elif choice == "4":
+        play_heuristic_vs_heuristic()
+    else:
+        print("Invalid choice, defaulting to Human vs Heuristic")
+        play_human_vs_heuristic()

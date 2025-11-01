@@ -3,16 +3,24 @@ import pygame
 import numpy as np
 from game.go_board import GoBoard
 from typing import Optional, Tuple
+from agents.base_agent import Agent
 
 class GoRenderer:
     """Pygame-based Go board renderer with mouse interaction"""
     
-    def __init__(self, board: GoBoard, cell_size: int = 60):
+    def __init__(self, board: GoBoard, cell_size: int = 60, 
+                 black_agent: Optional['Agent'] = None,
+                 white_agent: Optional['Agent'] = None):
         self.board = board
         self.cell_size = cell_size
         self.margin = cell_size
         self.width = board.size * cell_size + 2 * self.margin
         self.height = board.size * cell_size + 2 * self.margin + 100  # Extra space for info
+
+        self.black_agent = black_agent
+        self.white_agent = white_agent
+        self.ai_move_delay = 500  # milliseconds delay for AI moves
+        self.last_ai_move_time = 0
         
         # Colors
         self.COLOR_BG = (220, 179, 92)  # Wood color
@@ -95,16 +103,18 @@ class GoRenderer:
         """Draw game information at bottom"""
         y_start = self.margin + self.board.size * self.cell_size + 20
         
-        # Game over message (if game is over)
+        # Game over message
         if self.game_over:
             text = self.font.render("GAME OVER!", True, self.COLOR_GAME_OVER)
-            # Center the text
             text_rect = text.get_rect(center=(self.width // 2, y_start))
             self.screen.blit(text, text_rect)
-            y_start += 40  # Push other info down
+            y_start += 40
         else:
-            # Current player (only show if game not over)
+            # Current player with agent name if applicable
             player_text = "Black" if self.board.current_player == 1 else "White"
+            agent = self.black_agent if self.board.current_player == 1 else self.white_agent
+            if agent:
+                player_text += f" ({agent.name})"  # Show agent name
             text = self.font.render(f"Turn: {player_text}", True, self.COLOR_LINE)
             self.screen.blit(text, (20, y_start))
         
@@ -118,6 +128,33 @@ class GoRenderer:
         text = self.small_font.render(inst_text, True, self.COLOR_LINE)
         self.screen.blit(text, (20, y_start + 65))
     
+    def _make_ai_move(self):
+        """Let AI agent make a move if it's their turn"""
+        if self.game_over:
+            return
+        
+        current_agent = None
+        if self.board.current_player == 1 and self.black_agent:
+            current_agent = self.black_agent
+        elif self.board.current_player == -1 and self.white_agent:
+            current_agent = self.white_agent
+        
+        if current_agent:
+            move = current_agent.select_move(self.board)
+            if move:
+                row, col = move
+                if self.board.play_move(row, col):
+                    self.last_move = (row, col)
+                    player = "Black" if self.board.current_player == -1 else "White"
+                    print(f"Move played: {player} ({current_agent.name}) at ({row}, {col})")
+                    
+                    if self.board.is_game_over():
+                        self.game_over = True
+                        print("Game Over! No more legal moves.")
+            else:
+                self.game_over = True
+                print("Game Over! Agent has no moves.")
+
     def get_board_position(self, mouse_pos: Tuple[int, int]) -> Optional[Tuple[int, int]]:
         """Convert mouse position to board coordinates"""
         x, y = mouse_pos
@@ -139,12 +176,15 @@ class GoRenderer:
         
         return (row, col)
     
+    
     def run_interactive(self):
-        """Run interactive game loop"""
+        """Run interactive game loop with optional AI agents"""
         clock = pygame.time.Clock()
         running = True
         
         while running:
+            current_time = pygame.time.get_ticks()
+            
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
@@ -157,22 +197,36 @@ class GoRenderer:
                     elif event.key == pygame.K_r:
                         self.board = GoBoard(self.board.size)
                         self.last_move = None
-                        self.game_over = False  # Added: reset game over flag
+                        self.game_over = False
+                        self.last_ai_move_time = current_time  # Reset AI timer
                 
                 elif event.type == pygame.MOUSEBUTTONDOWN:
-                    if not self.game_over:  # Added: only allow moves if game not over
-                        pos = self.get_board_position(event.pos)
-                        if pos:
-                            row, col = pos
-                            if self.board.play_move(row, col):
-                                self.last_move = (row, col)
-                                player = "Black" if self.board.current_player == -1 else "White"
-                                print(f"Move played: {player} at ({row}, {col})")
-                                
-                                # Added: check for game over
-                                if self.board.is_game_over():
-                                    self.game_over = True
-                                    print("Game Over! No more legal moves.")
+                    if not self.game_over:
+                        # Only allow human moves if no agent is controlling current player
+                        current_agent = (self.black_agent if self.board.current_player == 1 
+                                       else self.white_agent)
+                        if not current_agent:  # Human player
+                            pos = self.get_board_position(event.pos)
+                            if pos:
+                                row, col = pos
+                                if self.board.play_move(row, col):
+                                    self.last_move = (row, col)
+                                    player = "Black" if self.board.current_player == -1 else "White"
+                                    print(f"Move played: {player} at ({row}, {col})")
+                                    
+                                    if self.board.is_game_over():
+                                        self.game_over = True
+                                        print("Game Over! No more legal moves.")
+                                    else:
+                                        self.last_ai_move_time = current_time  # Start AI timer
+            
+            # AI move with delay for visibility
+            if not self.game_over and current_time - self.last_ai_move_time > self.ai_move_delay:
+                current_agent = (self.black_agent if self.board.current_player == 1 
+                               else self.white_agent)
+                if current_agent:
+                    self._make_ai_move()
+                    self.last_ai_move_time = current_time
             
             self.draw_board()
             clock.tick(30)
