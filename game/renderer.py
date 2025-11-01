@@ -28,7 +28,7 @@ class GoRenderer:
                  white_agent: Optional['Agent'] = None):
         
         if cell_size == None:
-            cell_size = _compute_cell_size()
+            cell_size = _compute_cell_size(BOARD_SIZE)
 
         self.board = board
         self.cell_size = cell_size
