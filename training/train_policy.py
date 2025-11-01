@@ -1,6 +1,6 @@
-# training/train_policy.py
+# training/train_policy.py - Updated for streaming
 """
-Train the policy network with supervised learning
+Train the policy network with supervised learning (streaming version)
 """
 import os
 import torch
@@ -10,11 +10,11 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 
 from models.policy_net import PolicyNetwork
-from training.data_loader import create_data_loaders
+from training.data_loader import create_streaming_loaders  # Changed import
 from config import CHECKPOINT_DIR, POLICY_MODEL_PATH, BATCH_SIZE, LEARNING_RATE, EPOCHS
 
 def train_policy_network(epochs=EPOCHS, batch_size=BATCH_SIZE, lr=LEARNING_RATE):
-    """Train the policy network"""
+    """Train the policy network with streaming data"""
     
     # Setup
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -32,19 +32,17 @@ def train_policy_network(epochs=EPOCHS, batch_size=BATCH_SIZE, lr=LEARNING_RATE)
     optimizer = optim.Adam(model.parameters(), lr=lr)
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
     
-    # Data loaders
-    print("\nLoading data...")
-    train_loader, val_loader = create_data_loaders(batch_size=batch_size)
+    # Data loader (streaming - no val split)
+    print("\nCreating streaming data loader...")
+    train_loader = create_streaming_loaders(batch_size=batch_size, num_workers=0)
     
     # Training history
     history = {
         'train_loss': [],
-        'train_acc': [],
-        'val_loss': [],
-        'val_acc': []
+        'train_acc': []
     }
     
-    best_val_acc = 0.0
+    best_train_acc = 0.0
     
     # Training loop
     for epoch in range(epochs):
@@ -57,8 +55,9 @@ def train_policy_network(epochs=EPOCHS, batch_size=BATCH_SIZE, lr=LEARNING_RATE)
         train_loss = 0.0
         train_correct = 0
         train_total = 0
+        batch_count = 0
         
-        pbar = tqdm(train_loader, desc="Training")
+        pbar = tqdm(train_loader, desc="Training", total=None)  # total=None for streaming
         for features, labels in pbar:
             features = features.to(device)
             labels = labels.to(device)
@@ -77,6 +76,7 @@ def train_policy_network(epochs=EPOCHS, batch_size=BATCH_SIZE, lr=LEARNING_RATE)
             _, predicted = outputs.max(1)
             train_total += labels.size(0)
             train_correct += predicted.eq(labels).sum().item()
+            batch_count += 1
             
             # Update progress bar
             pbar.set_postfix({
@@ -84,52 +84,37 @@ def train_policy_network(epochs=EPOCHS, batch_size=BATCH_SIZE, lr=LEARNING_RATE)
                 'acc': f'{100.*train_correct/train_total:.2f}%'
             })
         
-        train_loss /= len(train_loader)
+        train_loss /= batch_count
         train_acc = 100. * train_correct / train_total
-        
-        # Validation
-        model.eval()
-        val_loss = 0.0
-        val_correct = 0
-        val_total = 0
-        
-        with torch.no_grad():
-            for features, labels in tqdm(val_loader, desc="Validation"):
-                features = features.to(device)
-                labels = labels.to(device)
-                
-                outputs = model(features)
-                loss = criterion(outputs, labels)
-                
-                val_loss += loss.item()
-                _, predicted = outputs.max(1)
-                val_total += labels.size(0)
-                val_correct += predicted.eq(labels).sum().item()
-        
-        val_loss /= len(val_loader)
-        val_acc = 100. * val_correct / val_total
         
         # Update history
         history['train_loss'].append(train_loss)
         history['train_acc'].append(train_acc)
-        history['val_loss'].append(val_loss)
-        history['val_acc'].append(val_acc)
         
         # Print epoch summary
         print(f"\nEpoch {epoch+1} Summary:")
         print(f"  Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.2f}%")
-        print(f"  Val Loss:   {val_loss:.4f} | Val Acc:   {val_acc:.2f}%")
+        print(f"  Samples processed: {train_total:,}")
+        
+        # Save checkpoint every epoch
+        checkpoint_path = os.path.join(CHECKPOINT_DIR, f'policy_epoch_{epoch+1}.pth')
+        torch.save({
+            'epoch': epoch,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'train_acc': train_acc,
+        }, checkpoint_path)
         
         # Save best model
-        if val_acc > best_val_acc:
-            best_val_acc = val_acc
+        if train_acc > best_train_acc:
+            best_train_acc = train_acc
             torch.save({
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
-                'val_acc': val_acc,
+                'train_acc': train_acc,
             }, POLICY_MODEL_PATH)
-            print(f"  ✓ Saved best model (val_acc: {val_acc:.2f}%)")
+            print(f"  ✓ Saved best model (train_acc: {train_acc:.2f}%)")
         
         # Learning rate schedule
         scheduler.step()
@@ -140,7 +125,7 @@ def train_policy_network(epochs=EPOCHS, batch_size=BATCH_SIZE, lr=LEARNING_RATE)
     
     print(f"\n{'='*60}")
     print(f"Training complete!")
-    print(f"Best validation accuracy: {best_val_acc:.2f}%")
+    print(f"Best training accuracy: {best_train_acc:.2f}%")
     print(f"Model saved to: {POLICY_MODEL_PATH}")
     print(f"{'='*60}\n")
 
@@ -150,19 +135,17 @@ def plot_training_history(history):
     
     # Loss
     ax1.plot(history['train_loss'], label='Train Loss')
-    ax1.plot(history['val_loss'], label='Val Loss')
     ax1.set_xlabel('Epoch')
     ax1.set_ylabel('Loss')
-    ax1.set_title('Training and Validation Loss')
+    ax1.set_title('Training Loss')
     ax1.legend()
     ax1.grid(True)
     
     # Accuracy
     ax2.plot(history['train_acc'], label='Train Acc')
-    ax2.plot(history['val_acc'], label='Val Acc')
     ax2.set_xlabel('Epoch')
     ax2.set_ylabel('Accuracy (%)')
-    ax2.set_title('Training and Validation Accuracy')
+    ax2.set_title('Training Accuracy')
     ax2.legend()
     ax2.grid(True)
     
