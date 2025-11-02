@@ -1,12 +1,19 @@
 # config.py (NEW FILE - centralized configuration)
 """Configuration for AlphaGo training"""
 
+# Game configuration
+#########################
+
 # Board settings
 BOARD_SIZE = 19  # Changed from 9 to 19
 
 # Feature extraction
 HISTORY_LENGTH = 8
 NUM_FEATURE_PLANES = 17  # Can expand to 48 later
+
+
+# Policy net configuration
+#########################
 
 # Neural network architecture
 RESIDUAL_BLOCKS = 10  # For 19x19, we'll use deeper network
@@ -26,6 +33,12 @@ PROCESSED_DIR = "data/processed"
 CHECKPOINT_DIR = "checkpoints"
 POLICY_MODEL_PATH = "checkpoints/policy_net_19x19.pth"
 VALUE_MODEL_PATH = "checkpoints/value_net_19x19.pth"
+
+# Value net configuration
+#########################
+VALUE_MODEL_PATH = "checkpoints/value_net_19x19.pth"
+VALUE_HEAD_FILTERS = 1 # Number of filters in the value head's conv layer
+VALUE_HEAD_HIDDEN_SIZE = 256
 
 USE_MLFLOW=True
 MLFLOW_UPLOAD_TEST=False
