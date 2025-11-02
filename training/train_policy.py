@@ -13,7 +13,7 @@ import mlflow.pytorch
 
 from models.policy_net import PolicyNetwork
 from training.data_loader import create_streaming_loaders
-from config import CHECKPOINT_DIR, POLICY_MODEL_PATH, BATCH_SIZE, LEARNING_RATE, EPOCHS
+from config import CHECKPOINT_DIR, POLICY_MODEL_PATH, BATCH_SIZE, LEARNING_RATE, EPOCHS, USE_MLFLOW, MLFLOW_UPLOAD_TEST, MLFLOW_DEFAULT_URI
 
 def train_policy_network(epochs=EPOCHS, batch_size=BATCH_SIZE, lr=LEARNING_RATE, 
                         mlflow_uri=None, experiment_name="AlphaGo-Policy-Network"):
@@ -25,10 +25,40 @@ def train_policy_network(epochs=EPOCHS, batch_size=BATCH_SIZE, lr=LEARNING_RATE,
         print(f"MLflow tracking URI: {mlflow_uri}")
     
     mlflow.set_experiment(experiment_name)
+    s3_env_vars = [
+        "MLFLOW_S3_ENDPOINT_URL",
+        "AWS_ENDPOINT_URL", # Boto3 equivalent
+        "MLFLOW_S3_IGNORE_TLS",
+        "MLFLOW_S3_VERIFY_SSL",
+        "AWS_ACCESS_KEY_ID", # Unset these to ensure no direct S3 attempt
+        "AWS_SECRET_ACCESS_KEY",
+        "AWS_SESSION_TOKEN",
+        "AWS_DEFAULT_REGION",
+        "AWS_REGION",
+    ]
+    for var in s3_env_vars:
+        if var in os.environ:
+            print(f"Unsetting environment variable: {var}")
+            del os.environ[var]
     
     # Start MLflow run
     with mlflow.start_run(run_name=f"policy_net_19x19_epochs{epochs}"):
         
+        if MLFLOW_UPLOAD_TEST:
+            print(f"Current Run Artifact URI: {mlflow.get_artifact_uri()}")
+            print(f"AWS_ACCESS_KEY_ID: {os.environ.get('AWS_ACCESS_KEY_ID', 'Not Set')}")
+            print(f"AWS_SECRET_ACCESS_KEY: {'Set' if os.environ.get('AWS_SECRET_ACCESS_KEY') else 'Not Set'}")
+            print(f"AWS_SESSION_TOKEN: {'Set' if os.environ.get('AWS_SESSION_TOKEN') else 'Not Set'}")
+    
+            print("\nRunning instant artifact upload test...")
+            dummy_model_state = {'test_tensor': torch.randn(5, 5)}
+            dummy_path = os.path.join(CHECKPOINT_DIR, 'dummy_artifact_test.pth')
+            print(dummy_path)
+            torch.save(dummy_model_state, dummy_path)
+            mlflow.log_artifact(dummy_path, artifact_path="validation_test")
+            os.remove(dummy_path) # Clean up the dummy file
+            print("✓ Instant artifact upload test successful!")
+
         # Log hyperparameters
         mlflow.log_params({
             "board_size": 19,
@@ -230,13 +260,16 @@ if __name__ == "__main__":
                         help='Batch size for training')
     parser.add_argument('--lr', type=float, default=LEARNING_RATE,
                         help='Learning rate')
-    parser.add_argument('--mlflow-uri', type=str, default=None,
+    default_uri = MLFLOW_DEFAULT_URI if USE_MLFLOW else None
+    parser.add_argument('--mlflow-uri', type=str, default=default_uri,
                         help='MLflow tracking server URI (e.g., http://your-server:5000)')
-    parser.add_argument('--experiment-name', type=str, default='AlphaGo-Policy-Network',
+    parser.add_argument('--experiment-name', type=str, default='AlphaGo-Policy-Network2',
                         help='MLflow experiment name')
     
     args = parser.parse_args()
     
+    
+
     train_policy_network(
         epochs=args.epochs,
         batch_size=args.batch_size,

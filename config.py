@@ -26,3 +26,7 @@ PROCESSED_DIR = "data/processed"
 CHECKPOINT_DIR = "checkpoints"
 POLICY_MODEL_PATH = "checkpoints/policy_net_19x19.pth"
 VALUE_MODEL_PATH = "checkpoints/value_net_19x19.pth"
+
+USE_MLFLOW=True
+MLFLOW_UPLOAD_TEST=True
+MLFLOW_DEFAULT_URI="https://mlflow.chezombor.com/"
