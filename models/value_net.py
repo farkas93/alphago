@@ -44,7 +44,7 @@ class ValueNetwork(nn.Module):
         for block in self.residual_blocks:
             x = block(x)
         
-        value = F.relu(self.policy_bn(self.policy_conv(x)))
+        value = F.relu(self.value_bn(self.value_conv(x)))
         value = value.view(value.size(0), -1)
         value = F.relu(self.value_fc1(value))
         return  torch.tanh(self.value_fc2(value))
