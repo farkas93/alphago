@@ -5,6 +5,7 @@ Connects to the game server and plays as an AI opponent
 """
 import asyncio
 import websockets
+import ssl  # ADDED: Import ssl module
 import json
 import numpy as np
 import torch
@@ -34,11 +35,26 @@ class AgentClient:
     async def connect(self):
         """Establish WebSocket connection"""
         try:
-            self.ws = await websockets.connect(self.server_url)
+            # Create SSL context for wss:// connections
+            ssl_context = None
+            if self.server_url.startswith('wss://'):
+                ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+                ssl_context.check_hostname = False
+                ssl_context.verify_mode = ssl.CERT_NONE
+                print("[AgentClient] SSL verification disabled for self-signed certificates")
+            
+            self.ws = await websockets.connect(
+                self.server_url, 
+                ssl=ssl_context,
+                ping_interval=20,
+                ping_timeout=10
+            )
             print(f"[AgentClient] Connected to {self.server_url}")
             return True
         except Exception as e:
             print(f"[AgentClient] Connection failed: {e}")
+            import traceback
+            traceback.print_exc()
             return False
     
     async def register(self):
@@ -47,7 +63,7 @@ class AgentClient:
             "type": "register",
             "payload": {
                 "name": self.agent_name,
-                "type": "ai"  # Mark as AI player
+                "type": "ai"
             }
         }
         await self.ws.send(json.dumps(message))
@@ -72,7 +88,6 @@ class AgentClient:
         board = GoBoard(BOARD_SIZE)
         
         # Convert board representation
-        # Server: null/string array, Agent: 0/1/-1 numpy array
         server_board = state.get('board', [])
         for row in range(len(server_board)):
             for col in range(len(server_board[row])):
@@ -104,9 +119,8 @@ class AgentClient:
         players = session.get('players', [])
         for idx, player in enumerate(players):
             if player.get('id') == self.player_id:
-                # First player is black, second is white
                 return 'black' if idx == 0 else 'white'
-        return 'black'  # Default
+        return 'black'
     
     def is_my_turn(self, state: Dict[str, Any], my_color: str) -> bool:
         """Check if it's this agent's turn"""
@@ -173,8 +187,9 @@ class AgentClient:
         move = self.agent.select_move(board)
         
         if move is None:
-            print(f"[AgentClient] No legal moves available (passing)")
-            # TODO: Implement pass functionality
+            print(f"[AgentClient] No legal moves available, passing")
+            # FIXED: Send pass move to server
+            await self.pass_turn(session['id'])
             return
         
         row, col = move
@@ -184,7 +199,22 @@ class AgentClient:
         
         # Send move to server
         await self.make_move(session['id'], row, col)
-    
+
+    # ADDED: New method to send pass
+    async def pass_turn(self, session_id: str):
+        """Send pass move to server"""
+        message = {
+            "type": "move",
+            "payload": {
+                "sessionId": session_id,
+                "move": {
+                    "pass": True
+                }
+            }
+        }
+        await self.ws.send(json.dumps(message))
+        print(f"[AgentClient] Passed turn")
+        
     async def handle_message(self, message: Dict[str, Any]):
         """Route incoming messages to appropriate handlers"""
         msg_type = message.get('type')
@@ -193,7 +223,6 @@ class AgentClient:
         if msg_type == 'registered':
             self.player_id = payload['player']['id']
             print(f"[AgentClient] Registered with ID: {self.player_id}")
-            # After registration, find a match
             await self.find_match('go')
             
         elif msg_type == 'waiting_for_opponent':
@@ -208,7 +237,6 @@ class AgentClient:
         elif msg_type == 'game_end':
             result = payload.get('result', {})
             print(f"[AgentClient] Game ended: {result}")
-            # Could auto-search for new game here
             
         elif msg_type == 'error':
             print(f"[AgentClient] Error: {payload.get('message')}")
@@ -219,10 +247,8 @@ class AgentClient:
             return
         
         try:
-            # Register player
             await self.register()
             
-            # Listen for messages
             async for message in self.ws:
                 try:
                     data = json.loads(message)
